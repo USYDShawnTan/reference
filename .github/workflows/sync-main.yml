@@ -1,0 +1,66 @@
+name: Sync Upstream to main
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 每天执行一次
+  workflow_dispatch:
+
+jobs:
+  sync_main_from_upstream:
+    name: Sync main from upstream repo
+    runs-on: ubuntu-latest
+    if: ${{ github.event.repository.fork }}
+
+    steps:
+      - name: Checkout target repo main branch
+        uses: actions/checkout@v3
+        with:
+          ref: "main" # 指定分支为main
+
+      - name: Configure git
+        run: |
+          git config --global user.email "${{ secrets.GIT_EMAIL }}"
+          git config --global user.name "${{ secrets.GIT_NAME }}"
+
+      - name: Add upstream repo
+        run: |
+          git remote add upstream https://github.com/jaywcjlove/reference.git
+
+      - name: Fetch upstream repo
+        run: |
+          git fetch upstream
+
+      - name: Backup sync-main.yml
+        run: |
+          cp .github/workflows/sync-main.yml /tmp/sync-main.yml
+
+      - name: Force update local main with upstream main
+        run: |
+          git reset --hard upstream/main
+          git reset HEAD .github/workflows
+          git checkout -- .github/workflows
+
+      - name: Restore sync-main.yml
+        run: |
+          mv /tmp/sync-main.yml .github/workflows/sync-main.yml
+
+      - name: Add changes
+        run: |
+          git add .github/workflows/sync-main.yml
+
+      - name: Commit changes
+        run: |
+          git commit -m "Restore sync-main.yml after upstream sync"
+
+      - name: Force push changes to main
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.PAT }}@${{ secrets.REPO_URL }}
+          git push --force origin main
+        env:
+          GIT_AUTHOR_NAME: ${{ secrets.GIT_NAME }}
+          GIT_AUTHOR_EMAIL: ${{ secrets.GIT_EMAIL }}
+          GIT_COMMITTER_NAME: ${{ secrets.GIT_NAME }}
+          GIT_COMMITTER_EMAIL: ${{ secrets.GIT_EMAIL }}
